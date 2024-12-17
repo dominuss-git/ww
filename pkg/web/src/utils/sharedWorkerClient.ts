@@ -61,11 +61,11 @@ class SharedWorkerClient {
             } else {
               // let temp = persisters.default.persistClient;
               // persisters.default.persistClient = () => {}
-              // e.data.payload.value?.clientState.queries.forEach((query) => {
-              //   queryClient.setQueryData(query.queryKey, query.state.data)
-              // })
+              e.data.payload.value?.clientState.queries.forEach((query) => {
+                queryClient.setQueryData(query.queryKey, (old: any) => query.state.data)
+              })
               // persisters.default.persistClient = temp;
-              persistQueryClientRestore({ queryClient, persister: createDefaultPersister(e.data.payload.value), buster: "" })
+              // persistQueryClientRestore({ queryClient, persister: createDefaultPersister(e.data.payload.value), buster: "" })
             }
           }
           break;

@@ -5,7 +5,7 @@ import { useLongTestQuery } from "./trpc/queries/useLongTestQuery";
 
 export const TestComponent = () => {
   const { users, refetch } = useUsersQuery();
-  const { data, refetch: fetch, isLoading, fetchStatus } = useLongTestQuery()
+  // const { data, refetch: fetch, isFetching, fetchStatus, isLoading, status, isRefetching } = useLongTestQuery()
 
   const [state, setState] = useState<number>(0);
   const setRandomValue = () => {
@@ -25,16 +25,16 @@ export const TestComponent = () => {
     })
   }, [])
 
-  useEffect(() => {
-    console.log(fetchStatus);
-  }, [fetchStatus])
+  // useEffect(() => {
+  //   console.log(isFetching, fetchStatus, isLoading, status, isRefetching);
+  // }, [isFetching, fetchStatus, isLoading, status, isRefetching])
 
   return (
     <div>
       {JSON.stringify(users, null, 2)}
       <button onClick={setRandomValue}>{state}</button>
       <button onClick={() => refetch()}>refetch</button>
-      <button disabled={fetchStatus === 'fetching'} onClick={() => fetch()}>{data as string}</button>
+      {/* <button disabled={fetchStatus === 'fetching'} onClick={() => fetch()}>{data as string}</button> */}
     </div>
   );
 };

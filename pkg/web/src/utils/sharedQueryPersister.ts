@@ -12,13 +12,9 @@ function createUpdatePersister(idbValidKey: string = "reactQuery") {
   return {
     persistClient: (client: PersistedClient) => {
       // if (shouldSend(client)) {
-        console.log("persist", client.clientState);
+        // console.log("persist", client.clientState);
 
-        sharedWorkerClient.cacheOperations({
-          ops: ECacheOps.SET,
-          key: idbValidKey,
-          value: client,
-        });
+        
       // }
     },
     restoreClient: async () => {
