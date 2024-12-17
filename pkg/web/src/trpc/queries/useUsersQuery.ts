@@ -4,7 +4,7 @@ export type TUser = RouterOutputs["user"];
 
 export const useUsersQuery = () => {
   const { data, isFetching, refetch, remove } =
-    trpc.user.useQuery(undefined, {
+    trpc.users.user.useQuery(undefined, {
       retry: false,
       // enabled: false,
       refetchOnMount: false,

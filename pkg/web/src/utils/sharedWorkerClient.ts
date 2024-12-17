@@ -1,47 +1,26 @@
-import {
-  PersistedClient,
-  persistQueryClient,
-  persistQueryClientRestore,
-  persistQueryClientSave,
-} from "@tanstack/react-query-persist-client";
 // import // EMessageType,
 // IMessage,
 // IMessageBase,
 // ICacheMessage,
 // "./sharedWorker";
 
-import { ECacheOps, EMessageType, ICacheOperations, IMessage } from "./type";
+import { AllPathsType, EMessageType, ExtractedTypes, IMessage, IRequestPayload, ResponseEsque, TTRPCUtils } from "./type";
 // import { updateCachePersister } from "./sharedQueryPersister";
-import { queryClient } from "../contexts";
-import { createDefaultPersister, persisters } from "./sharedQueryPersister";
+import { queryClient, trpc } from "../contexts";
+import { ResponseWaiter } from "./responseWaiter";
+// import { createDefaultPersister, persisters } from "./sharedQueryPersister";
 
 const instance = new SharedWorker(
   new URL("./sharedWorker.ts", import.meta.url),
   { type: "module", name: "sharedWorker" }
 );
 
-class CacheInitializer {
-  private changeListeners: Array<(value: unknown) => void> = [];
-  isCacheInitializing: boolean = false;
-
-  waitCache() {
-    return new Promise((resolve) => {
-      this.changeListeners.push(resolve);
-    });
-  }
-
-  notifyListeners(data?: PersistedClient) {
-    this.changeListeners.forEach((listener) => {
-      listener(data);
-    });
-    this.changeListeners = [];
-    this.isCacheInitializing = true;
-  }
-}
-
 class SharedWorkerClient {
-  cacheInitializer = new CacheInitializer();
+  responseWaiter = new ResponseWaiter<ResponseEsque>();
+  // cacheInitializer = new CacheInitializer();
+  trpcUtils?: TTRPCUtils;
   listeners = new Map<string, (event: IMessage["payload"]) => void>();
+
   constructor(private instance: SharedWorker) {
     window.addEventListener("beforeunload", () => {
       this.disconnect();
@@ -53,27 +32,53 @@ class SharedWorkerClient {
           console.log(e.data);
           break;
         }
-        case EMessageType.CACHE: {
-          console.log(e.data);
-          if (e.data.payload.ops === ECacheOps.SET) {
-            if (!this.cacheInitializer.isCacheInitializing) {
-              this.cacheInitializer.notifyListeners(e.data.payload.value);
-            } else {
-              // let temp = persisters.default.persistClient;
-              // persisters.default.persistClient = () => {}
-              e.data.payload.value?.clientState.queries.forEach((query) => {
-                queryClient.setQueryData(query.queryKey, (old: any) => query.state.data)
-              })
-              // persisters.default.persistClient = temp;
-              // persistQueryClientRestore({ queryClient, persister: createDefaultPersister(e.data.payload.value), buster: "" })
-            }
+        case EMessageType.RESPONSE: {
+          // console.log(e.data.payload)
+          const result: ResponseEsque = {
+            json: () => e.data.payload.response,
+          };
+          console.log("response", e.data);
+          this.responseWaiter.notifyListeners(result, e.data.payload.queryTarget);
+          break;
+        }
+        case EMessageType.UPDATE_QUERY_TARGET: {
+          console.log("update_targets", e.data)
+          if (this.trpcUtils) {
+            const result = e.data.payload.queryTargets.reduce((acc: any, key) => {
+              const a = acc[key];
+
+              return a;
+            }, this.trpcUtils);
+
+            console.log(e.data.payload.data);
+
+            result.setData(undefined, e.data.payload.data);
           }
           break;
         }
+        // case EMessageType.CACHE: {
+        // console.log(e.data);
+        // if (e.data.payload.ops === ECacheOps.SET) {
+        //   if (!this.cacheInitializer.isCacheInitializing) {
+        //     this.cacheInitializer.notifyListeners(e.data.payload.value);
+        //   } else {
+        //     // let temp = persisters.default.persistClient;
+        //     // persisters.default.persistClient = () => {}
+        //     e.data.payload.value?.clientState.queries.forEach((query) => {
+        //       queryClient.setQueryData(query.queryKey, (old: any) => query.state.data)
+        //     })
+        //     // persisters.default.persistClient = temp;
+        //     // persistQueryClientRestore({ queryClient, persister: createDefaultPersister(e.data.payload.value), buster: "" })
+        //   }
+        // }
+        // break;
+        // }
         default: {
+          console.log("unhandled", e.data)
           this.listeners.forEach((listener) => listener(e.data.payload));
         }
       }
+
     };
   }
 
@@ -90,6 +95,11 @@ class SharedWorkerClient {
     this.postMessage(message);
   }
 
+  request(payload: IRequestPayload) {
+    const message: IMessage = { type: EMessageType.REQUEST, payload };
+    this.postMessage(message);
+  }
+
   subscribe(callback: (event: IMessage["payload"]) => void) {
     const id = "";
     this.listeners.set(id, callback);
@@ -101,17 +111,17 @@ class SharedWorkerClient {
     this.listeners.delete(id);
   }
 
-  async cacheOperations(options: ICacheOperations) {
-    const message: IMessage = {
-      type: EMessageType.CACHE,
-      payload: options,
-    };
-    this.instance.port.postMessage(message);
+  // async cacheOperations(options: ICacheOperations) {
+  //   const message: IMessage = {
+  //     type: EMessageType.CACHE,
+  //     payload: options,
+  //   };
+  //   this.instance.port.postMessage(message);
 
-    if (options.ops === ECacheOps.GET) {
-      return await this.cacheInitializer.waitCache();
-    }
-  }
+  //   if (options.ops === ECacheOps.GET) {
+  //     return await this.cacheInitializer.waitCache();
+  //   }
+  // }
 }
 
 export const sharedWorkerClient = new SharedWorkerClient(instance);

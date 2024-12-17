@@ -1,6 +1,7 @@
 import {
   createTRPCReact,
   httpBatchLink,
+  httpLink,
   inferReactQueryProcedureOptions,
 } from "@trpc/react-query";
 import {
@@ -23,8 +24,8 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { ResponseEsque } from '../../../node_modules/@trpc/client/src/internals/types';
-import axios, { AxiosError, RawAxiosRequestHeaders } from 'axios';
+import { ResponseEsque } from "../../../node_modules/@trpc/client/src/internals/types";
+import axios, { AxiosError, RawAxiosRequestHeaders } from "axios";
 
 import { AppRouter } from "../../../../api/src/routers/index";
 import {
@@ -34,10 +35,12 @@ import {
   persistQueryClientRestore,
   persistQueryClientSubscribe,
 } from "@tanstack/react-query-persist-client";
-// import { createSharedPersister } from "../../utils/sharedQueryPersister";
 import { sharedWorkerClient } from "../../utils/sharedWorkerClient";
-import { ECacheOps } from "../../utils/type";
-import { persisters } from "../../utils/sharedQueryPersister";
+import { AllPathsType } from "../../utils/type";
+// import { createSharedPersister } from "../../utils/sharedQueryPersister";
+// import { sharedWorkerClient } from "../../utils/sharedWorkerClient";
+// import { ECacheOps } from "../../utils/type";
+// import { persisters } from "../../utils/sharedQueryPersister";
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -53,8 +56,6 @@ interface ITRPCContext {
 }
 
 export const queryCache = new QueryCache();
-
-// queryCache.
 
 const trpcContext = createContext<ITRPCContext | undefined>(undefined);
 // export const persister = createSharedPersister();
@@ -121,15 +122,25 @@ export const queryClient = new QueryClient({
       cacheTime: 1000 * 5, // 5sec,
       onSettled: () => {
         // persistQueryClient({ queryClient, persister: persisters.updatePersister, buster: "" })
-        sharedWorkerClient.cacheOperations({
-          ops: ECacheOps.SET,
-          key: "reactQuery",
-          value: persistClient(queryClient),
-        });
+        // sharedWorkerClient.cacheOperations({
+        //   ops: ECacheOps.SET,
+        //   key: "reactQuery",
+        //   value: persistClient(queryClient),
+        // });
       },
     },
   },
 });
+
+const UtilsProxy = ({ children }: { children: ReactNode }) => {
+  const utils = trpc.useUtils();
+  useEffect(() => {
+    console.log("utils");
+    sharedWorkerClient.trpcUtils = utils;
+  }, [utils]);
+
+  return <>{children}</>;
+};
 
 export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
   const [access_token, setAccessToken] = useState<string>();
@@ -137,16 +148,17 @@ export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
     (() => {
       let previousStatus: FetchStatus = "idle";
       return (cache: QueryCacheNotifyEvent) => {
+        // console.log("cache", cache);
         if (
           previousStatus !== "fetching" &&
           cache.query.state.fetchStatus === "fetching"
         ) {
           const persistedClient = persistClient(queryClient);
-          sharedWorkerClient.cacheOperations({
-            ops: ECacheOps.SET,
-            key: "reactQuery",
-            value: persistedClient
-          });
+          // sharedWorkerClient.cacheOperations({
+          //   ops: ECacheOps.SET,
+          //   key: "reactQuery",
+          //   value: persistedClient
+          // });
           previousStatus = "fetching";
         } else if (cache.query.state.fetchStatus === "idle") {
           previousStatus = "idle";
@@ -154,110 +166,68 @@ export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
       };
     })()
   );
-  // const [persister] = useState(() => createSharedPersister());
-  // const [queryClient] = useState(
-  //   () => new QueryClient({
-  //     defaultOptions: {
-  //       queries: {
-  //         refetchOnWindowFocus: false,
-  //         retry: false,
-  //         cacheTime: 1000 * 5 // 5sec,
-  //       },
-  //     }
-  //   })
-  // );
-  // console.log(queryClient)
 
-  // persister.
+  const trpcClient = useMemo(() => {
+    // sharedWorkerClient.trpcUtils = utils;
+    return trpc.createClient({
+      links: [
+        httpLink({
+          url: import.meta.env.VITE_API_URL,
+          // You can pass any HTTP headers you wish here
+          async headers() {
+            return {
+              authorization: access_token,
+            };
+          },
+          async fetch(url, options) {
+            console.log(url, options);
+            url = url as string;
+            const { method, body, headers, signal } = options!;
+            const RPCMethod = method === "GET" ? "query" : "mutation";
+            const queryTargets: AllPathsType = url
+              .split("/trpc/")[1]
+              .split("?")[0]
+              .split(".") as AllPathsType;
+            const queryTarget = queryTargets.join('","');
+            const queryHash = `[["${queryTarget}"],{"type":"${RPCMethod}"}]`;
+            // console.log(`[["${queryTarget}"],{"type":${RPCMethod}}]`, "[[\"user\"],{\"type\":\"query\"}]")
+            // console.log(``);
+            const cache = queryCache.get(queryHash);
 
-  // useEffect(() => {
-  //   console.log(queryClient)
-  // }, [queryClient])
+            // utils.user.invalidate()
+            console.log("request", queryTargets);
 
-  // createHTTPBatchLink
+            sharedWorkerClient.request({
+              url,
+              method: method as "GET" | "POST",
+              body,
+              headers,
+              queryTargets,
+              isRefetching: cache?.state.dataUpdateCount !== 0,
+            });
 
-  const trpcClient = useMemo(
-    () =>
-      trpc.createClient({
-        links: [
-          httpBatchLink({
-            url: import.meta.env.VITE_API_URL,
-            // You can pass any HTTP headers you wish here
-            async headers() {
-              return {
-                authorization: access_token,
-              };
-            },
-            async fetch(url, options) {
-              url = url as string;
-              const { method, body, headers, signal } = options!;
-
-              return undefined;
-              // return axios
-              //   .request({
-              //     url,
-              //     method,
-              //     headers: headers as RawAxiosRequestHeaders,
-              //     data: body,
-              //     signal: signal || undefined,
-              //     // withCredentials: true,
-              //   })
-              //   .then(
-              //     (data) =>
-              //     {
-              //       const result: ResponseEsque = {
-              //         // ok: true,
-              //         // headers: data.headers,
-              //         // redirected: false,
-              //         // status: data.status,
-              //         // statusText: data.statusText,
-              //         // url,
-              //         json: () => data.data,
-              //         // clone: () => data.data,
-              //         // type: 'default',
-              //       }
-
-              //       return result;
-              //     }
-              //   )
-              //   .catch(
-              //     (error: AxiosError) =>
-              //     {
-              //       const result: ResponseEsque = {
-              //         // ok: false,
-              //         // headers: (error.response?.headers || {}),
-              //         // redirected: false,
-              //         // status: error.response?.status,
-              //         // statusText: error.response?.statusText,
-              //         // url,
-              //         json: async () => await error.response?.data,
-              //         // clone: () => error.response?.data,
-              //         // type: 'error',
-              //       }
-
-              //       return result;
-              //     }
-                // );
-            },
-          }),
-        ],
-      }),
-    [access_token]
-  );
+            return await sharedWorkerClient.responseWaiter.wait(queryTarget);
+          },
+        }),
+      ],
+    });
+  }, [access_token]);
 
   return (
     <trpcContext.Provider value={{ setAccessToken, access_token }}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <PersistQueryClientProvider
+        <QueryClientProvider
           client={queryClient}
-          persistOptions={{
-            persister: persisters.updatePersister,
-            buster: "",
-            maxAge: 1000 * 60 * 60 * 24 * 2,
-          }}
+          // persistOptions={{
+          //   persister: persisters.updatePersister,
+          //   buster: "",
+          //   maxAge: 1000 * 60 * 60 * 24 * 2,
+          // }}
         >
-          {children}
-        </PersistQueryClientProvider>
+          <UtilsProxy>
+            {children}
+          </UtilsProxy>
+        </QueryClientProvider>
       </trpc.Provider>
     </trpcContext.Provider>
   );
