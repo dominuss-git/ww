@@ -11,19 +11,25 @@ import {
 } from "./type";
 import axios, { AxiosError, RawAxiosRequestHeaders } from "axios";
 import { ResponseWaiter } from "./responseWaiter";
+import { ApiInstance } from "./apiInstance";
 
 declare const self: SharedWorkerGlobalScope;
 
 interface ICacheEntity {
   fetchStatus: "idle" | "fetching";
   response: any;
+  inputs: any;
 }
 
 class SharedWorker {
-  private responseWaiter = new ResponseWaiter<any>();
+  private responseWaiter = new ResponseWaiter<{
+    status: "success" | "error";
+    response: any;
+  }>();
   private nextConnectionId = 1;
   private connections: Map<number, MessagePort> = new Map();
   // private cache = new Map<string, PersistedClient>();
+  private api = new ApiInstance();
   private cache = new Map<string, ICacheEntity>();
   constructor() {}
 
@@ -63,29 +69,30 @@ class SharedWorker {
     });
   }
 
-  private async apiRequest(data: IRequestPayload, queryTarget: string) {
-    const { url, queryTargets, method, headers, body } = data;
-
-    this.cache.set(queryTarget, {
+  private async apiRequest(
+    data: IRequestPayload,
+    topicTarget: string,
+    connectionId: number
+  ) {
+    const { url, method, headers, body } = data;
+    // try {
+    const inputs = this.api.getInputsFromUrl(url);
+    this.cache.set(topicTarget, {
       fetchStatus: "fetching",
       response: undefined,
+      inputs,
     });
-    const response = await axios
-      .request({
-        url,
-        method,
-        headers: headers as RawAxiosRequestHeaders,
-        data: body,
-      })
-      .then((data) => {
-        return data.data;
-      })
-      .catch((error: AxiosError) => {
-        return error.response?.data;
-      });
-    this.cache.set(queryTarget, { fetchStatus: "idle", response });
-    this.responseWaiter.notifyListeners(response, queryTarget);
-    return response;
+
+    const { response, status } = await this.api.request({
+      url,
+      method,
+      headers,
+      body,
+    });
+
+    this.cache.set(topicTarget, { fetchStatus: "idle", response, inputs });
+    this.responseWaiter.notifyListeners({ response, status }, topicTarget);
+    return { response, status, inputs };
   }
 
   private async handleMessage(connectionId: number, message: IMessage) {
@@ -101,95 +108,39 @@ class SharedWorker {
       //   break;
       // }
       case EMessageType.REQUEST: {
-        const { queryTargets, isRefetching } = message.payload;
+        const { topicTargets: queryTargets, method } = message.payload;
+        const topicTarget = queryTargets.join('","');
+
         let response: any;
+        let status: "success" | "error";
+        if (method === "GET") {
+          const { status: s, response: r } = await this.processQuery(
+            connectionId,
+            message.payload,
+            topicTarget
+          );
+          response = r;
+          status = s;
+        } else {
+          const { response: r, status: s } = await this.processMutation(
+            connectionId,
+            message.payload,
+            topicTarget
+          );
 
-        const queryTarget = queryTargets.join('","');
-
-        // if ()
-
-        const existingEntity = this.cache.get(queryTarget);
-
-        if (!existingEntity) {
-          response = await this.apiRequest(message.payload, queryTarget);
-          // const payload: IMessage = {
-          //   type: EMessageType.RESPONSE,
-          //   payload: {
-          //     response,
-          //     queryTarget,
-          //   },
-          //   // cache: this.cache,
-          //   // response
-          // }
-          // this.sendMessage(connectionId, payload);
+          response = r;
+          status = s;
         }
-
-        if (
-          existingEntity &&
-          existingEntity.fetchStatus === "idle" &&
-          !isRefetching
-        ) {
-          response = existingEntity.response;
-        }
-
-        if (
-          existingEntity &&
-          existingEntity.fetchStatus === "fetching" &&
-          !isRefetching
-        ) {
-          response = await this.responseWaiter.wait(queryTarget);
-        }
-
-        if (existingEntity && isRefetching) {
-          if (existingEntity.fetchStatus === "fetching") {
-            response = await this.responseWaiter.wait(queryTarget);
-          } else {
-            response = await this.apiRequest(message.payload, queryTarget);
-            this.broadcastMessage(connectionId, {
-              type: EMessageType.UPDATE_QUERY_TARGET,
-              payload: {
-                queryTargets,
-                data: response.result.data,
-              },
-            });
-          }
-        }
-
-        // if (!existingEntity || isRefetching) {
-        //   if (
-        //     !!existingEntity &&
-        //     isRefetching &&
-        //     existingEntity.fetchStatus === "fetching"
-        //   ) {
-        //     response = await this.responseWaiter.wait(queryTarget);
-        //   } else {
-        //     response = await this.apiRequest(message.payload);
-        // this.responseWaiter.notifyListeners(response, queryTarget);
-        //     if (isRefetching) {
-        // this.broadcastMessage(connectionId, {
-        //   type: EMessageType.UPDATE_QUERY_TARGET,
-        //   payload: {
-        //     queryTargets,
-        //     data: response.result.data,
-        //   },
-        // });
-        //     }
-        //   }
-        // } else {
-        //   if (existingEntity.fetchStatus === "idle") {
-        //     response = existingEntity.response;
-        //   } else {
-        //     response = await this.responseWaiter.wait(queryTarget);
-        //   }
-        // }
 
         const payload: IMessage = {
           type: EMessageType.RESPONSE,
           payload: {
             response,
-            queryTarget,
+            status,
+            topicTarget: topicTarget,
+            cache: this.cache,
           },
-          // cache: this.cache,
+          // cache: this.cache
           // response
         };
 
@@ -200,6 +151,110 @@ class SharedWorker {
       default:
         console.warn(`Unknown message type: ${message.type}`);
     }
+  }
+
+  private async processMutation(
+    connectionId: number,
+    message: IRequestPayload,
+    topicTarget: string
+  ) {
+    const { response, status } = await this.apiRequest(
+      message,
+      topicTarget,
+      connectionId
+    );
+    if (status === "success") {
+      const body: {
+        [key: string]: any;
+        invalidateTargetsOnSuccess: AllPathsType;
+      } = JSON.parse(message.body);
+
+      const topicTarget = body.invalidateTargetsOnSuccess.join('","');
+
+      const inputs = this.cache.get(topicTarget)?.inputs;
+
+      this.sendMessage(connectionId, {
+        type: EMessageType.INVALIDATE_TOPIC_TARGET,
+        payload: { topicTargets: body.invalidateTargetsOnSuccess, inputs },
+      });
+      this.broadcastMessage(connectionId, {
+        type: EMessageType.INVALIDATE_TOPIC_TARGET,
+        payload: { topicTargets: body.invalidateTargetsOnSuccess, inputs },
+      });
+    }
+    return response;
+  }
+
+  private async processQuery(
+    connectionId: number,
+    message: IRequestPayload,
+    topicTarget: string
+  ) {
+    const { isRefetching, topicTargets: queryTargets } = message;
+    let response: any;
+    let status: "success" | "error" = "success";
+    const existingEntity = this.cache.get(topicTarget);
+
+    if (!existingEntity) {
+      const { response: output, status: s } = await this.apiRequest(
+        message,
+        topicTarget,
+        connectionId
+      );
+      status = s;
+      response = output;
+    }
+
+    if (
+      existingEntity &&
+      existingEntity.fetchStatus === "idle" &&
+      !isRefetching
+    ) {
+      response = existingEntity.response;
+      status = "success";
+    }
+
+    if (
+      existingEntity &&
+      existingEntity.fetchStatus === "fetching" &&
+      !isRefetching
+    ) {
+      const { response: r, status: s } = await this.responseWaiter.wait(
+        topicTarget
+      );
+      response = r;
+      status = s;
+    }
+
+    if (existingEntity && isRefetching) {
+      if (existingEntity.fetchStatus === "fetching") {
+        const { response: r, status: s } = await this.responseWaiter.wait(
+          topicTarget
+        );
+        response = r;
+        status = s;
+      } else {
+        const {
+          response: output,
+          inputs,
+          status: s,
+        } = await this.apiRequest(message, topicTarget, connectionId);
+        response = output;
+        status = s;
+        if (status === 'success') {
+          this.broadcastMessage(connectionId, {
+            type: EMessageType.UPDATE_TOPIC_TARGET,
+            payload: {
+              topicTargets: queryTargets,
+              data: status === "success" ? response.result.data : response.error,
+              inputs,
+            },
+          });
+        }
+      }
+    }
+
+    return { status, response };
   }
 
   // private handleCacheOperations(

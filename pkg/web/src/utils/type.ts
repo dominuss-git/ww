@@ -16,7 +16,8 @@ export enum EMessageType {
   // CACHE = "CACHE",
   REQUEST = "REQUEST",
   RESPONSE = "RESPONSE",
-  UPDATE_QUERY_TARGET = "UPDATE_QUERY_TARGET",
+  UPDATE_TOPIC_TARGET = "UPDATE_TOPIC_TARGET",
+  INVALIDATE_TOPIC_TARGET = "INVALIDATE_TOPIC_TARGET",
 }
 
 // interface ICacheOperationsBase {
@@ -70,7 +71,7 @@ export interface IRequestPayload {
   headers?: { [key: string]: string } | HeadersInit;
   // signal?: AbortSignal | null;
   url: string;
-  queryTargets: AllPathsType;
+  topicTargets: AllPathsType;
   isRefetching: boolean;
 }
 
@@ -82,16 +83,26 @@ interface IRequestMessage extends IMessageBase {
 interface IResponseMessage extends IMessageBase {
   type: EMessageType.RESPONSE;
   payload: {
-    response: any,
-    queryTarget: string;
+    response: any;
+    status: 'success' | 'error',
+    topicTarget: string;
   };
 }
 
-interface IInvalidateQueryTargets extends IMessageBase {
-  type: EMessageType.UPDATE_QUERY_TARGET;
+interface IUpdateTopicTargets extends IMessageBase {
+  type: EMessageType.UPDATE_TOPIC_TARGET;
   payload: {
-    queryTargets: AllPathsType;
-    data: any
+    topicTargets: AllPathsType;
+    data: any;
+    inputs: any;
+  };
+}
+
+interface IInvalidateTopicTargets extends IMessageBase {
+  type: EMessageType.INVALIDATE_TOPIC_TARGET;
+  payload: {
+    topicTargets: AllPathsType;
+    inputs: any
   };
 }
 
@@ -102,7 +113,8 @@ export type IMessage =
   | IBroadcastMessage
   | IRequestMessage
   | IResponseMessage
-  | IInvalidateQueryTargets;
+  | IUpdateTopicTargets
+  | IInvalidateTopicTargets;
 
 type WebReadableStreamEsque = {
   getReader: () => ReadableStreamDefaultReader<Uint8Array>;
@@ -149,10 +161,10 @@ type ExcludeKeys =
 
 export type AllPathsType = FilterLeafPaths<AppRouter, ExcludeKeys>;
 
-type FieldTypes<T, K extends keyof T> = T[K];
+// type FieldTypes<T, K extends keyof T> = T[K];
 
 export type TTRPCUtils = ReturnType<typeof trpc.useUtils>;
 
-export type ExtractedTypes<T extends TTRPCUtils = TTRPCUtils> = {
-  [K in AllPathsType[number]]: FieldTypes<T, K>;
-};
+// export type ExtractedTypes<T extends TTRPCUtils = TTRPCUtils> = {
+//   [K in AllPathsType[number]]: FieldTypes<T, K>;
+// };

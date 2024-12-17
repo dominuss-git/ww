@@ -4,10 +4,18 @@
 // ICacheMessage,
 // "./sharedWorker";
 
-import { AllPathsType, EMessageType, ExtractedTypes, IMessage, IRequestPayload, ResponseEsque, TTRPCUtils } from "./type";
+import {
+  AllPathsType,
+  EMessageType,
+  IMessage,
+  IRequestPayload,
+  ResponseEsque,
+  TTRPCUtils,
+} from "./type";
 // import { updateCachePersister } from "./sharedQueryPersister";
 import { queryClient, trpc } from "../contexts";
 import { ResponseWaiter } from "./responseWaiter";
+import { TRPCClientError } from "@trpc/client";
 // import { createDefaultPersister, persisters } from "./sharedQueryPersister";
 
 const instance = new SharedWorker(
@@ -34,25 +42,47 @@ class SharedWorkerClient {
         }
         case EMessageType.RESPONSE: {
           // console.log(e.data.payload)
-          const result: ResponseEsque = {
-            json: () => e.data.payload.response,
-          };
           console.log("response", e.data);
-          this.responseWaiter.notifyListeners(result, e.data.payload.queryTarget);
+          const result: ResponseEsque = {
+            json: () => {
+                return e.data.payload.response;
+            },
+          };
+          this.responseWaiter.notifyListeners(
+            result,
+            e.data.payload.topicTarget
+          );
           break;
         }
-        case EMessageType.UPDATE_QUERY_TARGET: {
-          console.log("update_targets", e.data)
+        case EMessageType.UPDATE_TOPIC_TARGET: {
+          console.log("update_targets", e.data);
           if (this.trpcUtils) {
-            const result = e.data.payload.queryTargets.reduce((acc: any, key) => {
-              const a = acc[key];
+            const result = e.data.payload.topicTargets.reduce(
+              (acc: any, key) => {
+                const a = acc[key];
 
-              return a;
-            }, this.trpcUtils);
+                return a;
+              },
+              this.trpcUtils
+            );
 
-            console.log(e.data.payload.data);
+            result.setData(e.data.payload.inputs, e.data.payload.data);
+          }
+          break;
+        }
+        case EMessageType.INVALIDATE_TOPIC_TARGET: {
+          console.log("update_targets", e.data);
+          if (this.trpcUtils) {
+            const result = e.data.payload.topicTargets.reduce(
+              (acc: any, key) => {
+                const a = acc[key];
 
-            result.setData(undefined, e.data.payload.data);
+                return a;
+              },
+              this.trpcUtils
+            );
+
+            result.refetch(e.data.payload.inputs);
           }
           break;
         }
@@ -74,11 +104,10 @@ class SharedWorkerClient {
         // break;
         // }
         default: {
-          console.log("unhandled", e.data)
+          console.log("unhandled", e.data);
           this.listeners.forEach((listener) => listener(e.data.payload));
         }
       }
-
     };
   }
 

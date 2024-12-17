@@ -3,8 +3,8 @@ import { RouterOutputs, trpc } from "../../contexts/TRPCContext";
 export type TUser = RouterOutputs["user"];
 
 export const useUsersQuery = () => {
-  const { data, isFetching, refetch, remove } =
-    trpc.users.user.useQuery(undefined, {
+  const { data, error, isFetching, refetch, remove } =
+    trpc.user.useQuery({ name: 'hello' }, {
       retry: false,
       // enabled: false,
       refetchOnMount: false,
@@ -14,6 +14,7 @@ export const useUsersQuery = () => {
 
   return {
     users: data,
+    error,
     isLoading: isFetching,
     refetch,
     remove,

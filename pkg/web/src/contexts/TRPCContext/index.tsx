@@ -37,6 +37,7 @@ import {
 } from "@tanstack/react-query-persist-client";
 import { sharedWorkerClient } from "../../utils/sharedWorkerClient";
 import { AllPathsType } from "../../utils/type";
+import { ApiInstance } from "../../utils/apiInstance";
 // import { createSharedPersister } from "../../utils/sharedQueryPersister";
 // import { sharedWorkerClient } from "../../utils/sharedWorkerClient";
 // import { ECacheOps } from "../../utils/type";
@@ -144,28 +145,28 @@ const UtilsProxy = ({ children }: { children: ReactNode }) => {
 
 export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
   const [access_token, setAccessToken] = useState<string>();
-  queryCache.subscribe(
-    (() => {
-      let previousStatus: FetchStatus = "idle";
-      return (cache: QueryCacheNotifyEvent) => {
-        // console.log("cache", cache);
-        if (
-          previousStatus !== "fetching" &&
-          cache.query.state.fetchStatus === "fetching"
-        ) {
-          const persistedClient = persistClient(queryClient);
-          // sharedWorkerClient.cacheOperations({
-          //   ops: ECacheOps.SET,
-          //   key: "reactQuery",
-          //   value: persistedClient
-          // });
-          previousStatus = "fetching";
-        } else if (cache.query.state.fetchStatus === "idle") {
-          previousStatus = "idle";
-        }
-      };
-    })()
-  );
+  // queryCache.subscribe(
+  //   (() => {
+  //     let previousStatus: FetchStatus = "idle";
+  //     return (cache: QueryCacheNotifyEvent) => {
+  //       // console.log("cache", cache);
+  //       if (
+  //         previousStatus !== "fetching" &&
+  //         cache.query.state.fetchStatus === "fetching"
+  //       ) {
+  //         const persistedClient = persistClient(queryClient);
+  //         // sharedWorkerClient.cacheOperations({
+  //         //   ops: ECacheOps.SET,
+  //         //   key: "reactQuery",
+  //         //   value: persistedClient
+  //         // });
+  //         previousStatus = "fetching";
+  //       } else if (cache.query.state.fetchStatus === "idle") {
+  //         previousStatus = "idle";
+  //       }
+  //     };
+  //   })()
+  // );
 
   const trpcClient = useMemo(() => {
     // sharedWorkerClient.trpcUtils = utils;
@@ -184,29 +185,43 @@ export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
             url = url as string;
             const { method, body, headers, signal } = options!;
             const RPCMethod = method === "GET" ? "query" : "mutation";
-            const queryTargets: AllPathsType = url
+            const targetTopics: AllPathsType = url
               .split("/trpc/")[1]
               .split("?")[0]
               .split(".") as AllPathsType;
-            const queryTarget = queryTargets.join('","');
-            const queryHash = `[["${queryTarget}"],{"type":"${RPCMethod}"}]`;
-            // console.log(`[["${queryTarget}"],{"type":${RPCMethod}}]`, "[[\"user\"],{\"type\":\"query\"}]")
-            // console.log(``);
-            const cache = queryCache.get(queryHash);
+            const targetTopic = targetTopics.join('","');
+            if (RPCMethod === "query") {
+              const queryHash = `[["${targetTopic}"],{"type":"${RPCMethod}"}]`;
+              const cache = queryCache.get(queryHash);
 
-            // utils.user.invalidate()
-            console.log("request", queryTargets);
+              sharedWorkerClient.request({
+                url,
+                method: method as "GET" | "POST",
+                body,
+                headers,
+                topicTargets: targetTopics,
+                isRefetching: cache?.state.dataUpdateCount !== 0,
+              });
+            } else {
+              sharedWorkerClient.request({
+                url,
+                method: method as "GET" | "POST",
+                body,
+                headers,
+                topicTargets: targetTopics,
+                isRefetching: false
+              });
+            }
 
-            sharedWorkerClient.request({
-              url,
-              method: method as "GET" | "POST",
-              body,
-              headers,
-              queryTargets,
-              isRefetching: cache?.state.dataUpdateCount !== 0,
-            });
+            console.log("request", targetTopics, body);
 
-            return await sharedWorkerClient.responseWaiter.wait(queryTarget);
+            return await sharedWorkerClient.responseWaiter.wait(targetTopic);
+
+            // const api = new ApiInstance();
+            // const result = await api.request({ method: method as 'GET' | 'POST', url, body, headers });
+            // return {
+            //   json: () => result.response
+            // }
           },
         }),
       ],
@@ -224,9 +239,7 @@ export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
           //   maxAge: 1000 * 60 * 60 * 24 * 2,
           // }}
         >
-          <UtilsProxy>
-            {children}
-          </UtilsProxy>
+          <UtilsProxy>{children}</UtilsProxy>
         </QueryClientProvider>
       </trpc.Provider>
     </trpcContext.Provider>
