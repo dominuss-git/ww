@@ -7,10 +7,10 @@ const randomNumber = Math.floor(Math.random() * 10);
 let user = Users[randomNumber];
 
 export const appRouter = router({
-  user: publicProcedure.input(z.object({ name: z.string() })).query(({ ctx }) => {
+  user: publicProcedure.input(z.object({ name: z.string() })).query(({ input }) => {
     console.log("user")
     // throw new TRPCError({ code: TRPC_ERROR_CODES_NAMES.BAD_REQUEST })
-    return user;
+    return {...user, nickname: input.name };
   }),
   updateUser: publicProcedure
     .input(

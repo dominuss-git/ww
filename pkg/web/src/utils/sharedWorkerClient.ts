@@ -1,22 +1,12 @@
-// import // EMessageType,
-// IMessage,
-// IMessageBase,
-// ICacheMessage,
-// "./sharedWorker";
-
 import {
-  AllPathsType,
   EMessageType,
   IMessage,
   IRequestPayload,
   ResponseEsque,
   TTRPCUtils,
 } from "./type";
-// import { updateCachePersister } from "./sharedQueryPersister";
-import { queryClient, trpc } from "../contexts";
 import { ResponseWaiter } from "./responseWaiter";
-import { TRPCClientError } from "@trpc/client";
-// import { createDefaultPersister, persisters } from "./sharedQueryPersister";
+import React from "react";
 
 const instance = new SharedWorker(
   new URL("./sharedWorker.ts", import.meta.url),
@@ -25,7 +15,6 @@ const instance = new SharedWorker(
 
 class SharedWorkerClient {
   responseWaiter = new ResponseWaiter<ResponseEsque>();
-  // cacheInitializer = new CacheInitializer();
   trpcUtils?: TTRPCUtils;
   listeners = new Map<string, (event: IMessage["payload"]) => void>();
 
@@ -86,23 +75,6 @@ class SharedWorkerClient {
           }
           break;
         }
-        // case EMessageType.CACHE: {
-        // console.log(e.data);
-        // if (e.data.payload.ops === ECacheOps.SET) {
-        //   if (!this.cacheInitializer.isCacheInitializing) {
-        //     this.cacheInitializer.notifyListeners(e.data.payload.value);
-        //   } else {
-        //     // let temp = persisters.default.persistClient;
-        //     // persisters.default.persistClient = () => {}
-        //     e.data.payload.value?.clientState.queries.forEach((query) => {
-        //       queryClient.setQueryData(query.queryKey, (old: any) => query.state.data)
-        //     })
-        //     // persisters.default.persistClient = temp;
-        //     // persistQueryClientRestore({ queryClient, persister: createDefaultPersister(e.data.payload.value), buster: "" })
-        //   }
-        // }
-        // break;
-        // }
         default: {
           console.log("unhandled", e.data);
           this.listeners.forEach((listener) => listener(e.data.payload));
@@ -115,7 +87,7 @@ class SharedWorkerClient {
     this.instance.port.postMessage(message);
   }
 
-  disconnect() {
+  private disconnect() {
     this.postMessage({ type: EMessageType.DISCONNECT });
   }
 
@@ -129,6 +101,10 @@ class SharedWorkerClient {
     this.postMessage(message);
   }
 
+  invalidateConnection() {
+    this.postMessage({ type: EMessageType.INVALIDATE_CONNECTION });
+  }
+
   subscribe(callback: (event: IMessage["payload"]) => void) {
     const id = "";
     this.listeners.set(id, callback);
@@ -139,18 +115,6 @@ class SharedWorkerClient {
   unsubscribe(id: string) {
     this.listeners.delete(id);
   }
-
-  // async cacheOperations(options: ICacheOperations) {
-  //   const message: IMessage = {
-  //     type: EMessageType.CACHE,
-  //     payload: options,
-  //   };
-  //   this.instance.port.postMessage(message);
-
-  //   if (options.ops === ECacheOps.GET) {
-  //     return await this.cacheInitializer.waitCache();
-  //   }
-  // }
 }
 
 export const sharedWorkerClient = new SharedWorkerClient(instance);

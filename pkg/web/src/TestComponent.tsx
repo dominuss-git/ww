@@ -4,18 +4,15 @@ import { sharedWorkerClient } from "./utils/sharedWorkerClient";
 import { useLongTestQuery } from "./trpc/queries/useLongTestQuery";
 import { trpc } from "./contexts";
 import { useUpdateUserMutation } from "./trpc/mutations/useUpdateUserMutation";
+import { Link, useNavigate } from "react-router-dom";
 
 export const TestComponent = () => {
   const { users, refetch, error } = useUsersQuery();
-  const utils = trpc.useUtils();
+  const navigate = useNavigate()
   const {
     data,
     refetch: fetch,
-    isFetching,
     fetchStatus,
-    isLoading,
-    status,
-    isRefetching,
   } = useLongTestQuery();
   const { userUpdate } = useUpdateUserMutation();
 
@@ -28,9 +25,9 @@ export const TestComponent = () => {
 
   // const utils = trpc.useUtils();
 
-  useEffect(() => {
-    console.log("error", error);
-  }, [error])
+  // useEffect(() => {
+  //   console.log("data", users, data);
+  // }, [users, data])
 
   // useEffect(() => {
   //   console.log(isFetching, fetchStatus, isLoading, status, isRefetching);
@@ -40,6 +37,8 @@ export const TestComponent = () => {
   return (
     <div>
       {JSON.stringify(users, null, 2)}
+      <button onClick={() => navigate("/test2")}>go to test2</button>
+      <button onClick={() => navigate({ search: '123' })}>search</button>
       {/* <button
         onClick={() =>
           setRandomValue()

@@ -1,8 +1,8 @@
 import { RouterInputs, trpc } from "../../contexts";
-import { AllPathsType } from "../../utils/type";
+import { AllTopicTargets } from "../../utils/type";
 
 type IUserUpdateInput = RouterInputs["updateUser"] & {
-  invalidateTargetsOnSuccess: AllPathsType
+  invalidateTargetsOnSuccess: AllTopicTargets
 }
 
 export const useUpdateUserMutation = () => {

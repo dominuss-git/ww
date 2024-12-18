@@ -1,14 +1,12 @@
-import { useEffect, useMemo } from "react";
-import { dehydrateClient, queryCache, trpc } from "../../contexts/TRPCContext";
-import { QueryCache, useQueryClient } from "@tanstack/react-query";
+import { trpc } from "../../contexts/TRPCContext";
 
 export const useLongTestQuery = () => {
-  const { data, isFetching, refetch, remove, fetchStatus, isLoading, status, error, isRefetching, ...opts } = trpc.longTest.useQuery(undefined, {
-    retry: false,
-    // enabled: false,
-    refetchOnMount: false,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
+  const { data, isFetching, refetch, remove, fetchStatus, isLoading, status, error, isRefetching } = trpc.longTest.useQuery(undefined, {
+    // retry: false,
+    // // enabled: false,
+    // refetchOnMount: false,
+    // refetchInterval: false,
+    // refetchOnWindowFocus: false,
   })
   
   return {

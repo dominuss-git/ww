@@ -1,52 +1,22 @@
-import { PersistedClient } from "@tanstack/react-query-persist-client";
 import { AppRouter } from "../../../api/src/routers";
 import { trpc } from "../contexts";
-
-// export enum ECacheOps {
-//   SET = "SET",
-//   GET = "GET",
-//   DELETE = "DELETE",
-// }
 
 export enum EMessageType {
   BROADCAST = "BROADCAST",
   REGISTERED = "REGISTERED",
   UNREGISTERED = "UNREGISTERED",
   DISCONNECT = "DISCONNECT",
-  // CACHE = "CACHE",
   REQUEST = "REQUEST",
   RESPONSE = "RESPONSE",
   UPDATE_TOPIC_TARGET = "UPDATE_TOPIC_TARGET",
   INVALIDATE_TOPIC_TARGET = "INVALIDATE_TOPIC_TARGET",
+  INVALIDATE_CONNECTION = "INVALIDATE_CONNECTION"
 }
-
-// interface ICacheOperationsBase {
-//   ops: ECacheOps;
-//   key: string;
-// }
-
-// interface ICacheOperationsSet extends ICacheOperationsBase {
-//   ops: ECacheOps.SET;
-//   value?: PersistedClient;
-// }
-
-// interface ICacheOperationsGetOrDelete extends ICacheOperationsBase {
-//   ops: ECacheOps.GET | ECacheOps.DELETE;
-// }
-
-// export type ICacheOperations =
-//   | ICacheOperationsGetOrDelete
-//   | ICacheOperationsSet;
 
 interface IMessageBase {
   type: EMessageType;
   payload?: any;
 }
-
-// interface ICacheMessage extends IMessageBase {
-//   type: EMessageType.CACHE;
-//   payload: ICacheOperations;
-// }
 
 interface IBroadcastMessage extends IMessageBase {
   type: EMessageType.BROADCAST;
@@ -71,7 +41,7 @@ export interface IRequestPayload {
   headers?: { [key: string]: string } | HeadersInit;
   // signal?: AbortSignal | null;
   url: string;
-  topicTargets: AllPathsType;
+  topicTargets: AllTopicTargets;
   isRefetching: boolean;
 }
 
@@ -84,37 +54,42 @@ interface IResponseMessage extends IMessageBase {
   type: EMessageType.RESPONSE;
   payload: {
     response: any;
-    status: 'success' | 'error',
+    status: "success" | "error";
     topicTarget: string;
   };
 }
 
-interface IUpdateTopicTargets extends IMessageBase {
+interface IUpdateTopicTargetsMessage extends IMessageBase {
   type: EMessageType.UPDATE_TOPIC_TARGET;
   payload: {
-    topicTargets: AllPathsType;
+    topicTargets: AllTopicTargets;
     data: any;
     inputs: any;
   };
 }
 
-interface IInvalidateTopicTargets extends IMessageBase {
+interface IInvalidateTopicTargetsMessage extends IMessageBase {
   type: EMessageType.INVALIDATE_TOPIC_TARGET;
   payload: {
-    topicTargets: AllPathsType;
-    inputs: any
+    topicTargets: AllTopicTargets;
+    inputs: any;
   };
 }
 
+interface IInvalidateConnectionMessage extends IMessageBase {
+  type: EMessageType.INVALIDATE_CONNECTION,
+  payload?: never,
+}
+
 export type IMessage =
-  // | ICacheMessage
   | IDisconnectMessage
   | IRegisteredMessage
   | IBroadcastMessage
   | IRequestMessage
   | IResponseMessage
-  | IUpdateTopicTargets
-  | IInvalidateTopicTargets;
+  | IUpdateTopicTargetsMessage
+  | IInvalidateTopicTargetsMessage
+  | IInvalidateConnectionMessage;
 
 type WebReadableStreamEsque = {
   getReader: () => ReadableStreamDefaultReader<Uint8Array>;
@@ -159,12 +134,18 @@ type ExcludeKeys =
   | "_procedure"
   | "meta";
 
-export type AllPathsType = FilterLeafPaths<AppRouter, ExcludeKeys>;
+export type AllTopicTargets = FilterLeafPaths<AppRouter, ExcludeKeys>;
 
-// type FieldTypes<T, K extends keyof T> = T[K];
+type PathsToString<T extends string[]> = T extends [infer First, ...infer Rest]
+  ? First extends string
+    ? Rest extends string[]
+      ? PathsToString<Rest> extends never
+        ? First
+        : `${First}","${PathsToString<Rest>}`
+      : First
+    : never
+  : never;
+
+export type TopicTarget = PathsToString<AllTopicTargets>;
 
 export type TTRPCUtils = ReturnType<typeof trpc.useUtils>;
-
-// export type ExtractedTypes<T extends TTRPCUtils = TTRPCUtils> = {
-//   [K in AllPathsType[number]]: FieldTypes<T, K>;
-// };

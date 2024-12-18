@@ -1,6 +1,5 @@
 export class ResponseWaiter<T> {
   private changeListeners = new Map<string, Array<(value: T) => void>>();
-  // isCacheInitializing: boolean = false;
 
   wait(key: string = 'defaultKey') {
     return new Promise<T>((resolve) => {
@@ -13,6 +12,5 @@ export class ResponseWaiter<T> {
       listener(data);
     });
     this.changeListeners.delete(key);
-    // this.isCacheInitializing = true;
   }
 }
