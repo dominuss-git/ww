@@ -2,6 +2,16 @@ import axios, { AxiosError, RawAxiosRequestHeaders } from "axios";
 import { IRequestPayload } from "./type";
 
 export class ApiInstance {
+  static getInputsFromUrl(url: string) {
+    const inputsString = url.split("input=")[1];
+    const inputs = !inputsString ? undefined : decodeURIComponent(inputsString);
+    if (!inputs) return;
+    try {
+      return JSON.parse(inputs);
+    } catch (e) {
+      return inputs;
+    }
+  }
   getInputsFromUrl(url: string) {
     const inputsString = url.split("input=")[1];
     const inputs = !inputsString ? undefined : decodeURIComponent(inputsString);

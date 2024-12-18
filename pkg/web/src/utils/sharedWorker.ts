@@ -72,10 +72,8 @@ class SharedWorker {
   private async apiRequest(
     data: IRequestPayload,
     topicTarget: string,
-    connectionId: number
   ) {
     const { url, method, headers, body } = data;
-    // try {
     const inputs = this.api.getInputsFromUrl(url);
     this.cache.set(topicTarget, {
       fetchStatus: "fetching",
@@ -161,7 +159,6 @@ class SharedWorker {
     const { response, status } = await this.apiRequest(
       message,
       topicTarget,
-      connectionId
     );
     if (status === "success") {
       const body: {
@@ -196,13 +193,12 @@ class SharedWorker {
     const existingEntity = this.cache.get(topicTarget);
 
     if (!existingEntity) {
-      const { response: output, status: s } = await this.apiRequest(
+      const { response: r, status: s } = await this.apiRequest(
         message,
         topicTarget,
-        connectionId
       );
+      response = r;
       status = s;
-      response = output;
     }
 
     if (
@@ -235,11 +231,11 @@ class SharedWorker {
         status = s;
       } else {
         const {
-          response: output,
+          response: r,
           inputs,
           status: s,
-        } = await this.apiRequest(message, topicTarget, connectionId);
-        response = output;
+        } = await this.apiRequest(message, topicTarget);
+        response = r;
         status = s;
         if (status === 'success') {
           this.broadcastMessage(connectionId, {

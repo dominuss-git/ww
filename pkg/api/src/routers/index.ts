@@ -9,7 +9,7 @@ let user = Users[randomNumber];
 export const appRouter = router({
   user: publicProcedure.input(z.object({ name: z.string() })).query(({ ctx }) => {
     console.log("user")
-    throw new TRPCError({ code: TRPC_ERROR_CODES_NAMES.BAD_REQUEST })
+    // throw new TRPCError({ code: TRPC_ERROR_CODES_NAMES.BAD_REQUEST })
     return user;
   }),
   updateUser: publicProcedure

@@ -191,7 +191,15 @@ export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
               .split(".") as AllPathsType;
             const targetTopic = targetTopics.join('","');
             if (RPCMethod === "query") {
-              const queryHash = `[["${targetTopic}"],{"type":"${RPCMethod}"}]`;
+              const inputs = ApiInstance.getInputsFromUrl(url);
+              const input = [
+                ["user"],
+                { input: { name: "hello" }, type: "query" },
+              ];
+              // const input2 = [["user"],{"input":{"name":"hello"},"type:query"}];
+              const queryHash = `[["${targetTopic}"],${
+                inputs ? `{"input":${JSON.stringify(inputs)},"type":"${RPCMethod}"}` : `{"type":"${RPCMethod}"}`
+              }]`;
               const cache = queryCache.get(queryHash);
 
               sharedWorkerClient.request({
@@ -202,6 +210,14 @@ export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
                 topicTargets: targetTopics,
                 isRefetching: cache?.state.dataUpdateCount !== 0,
               });
+              console.log(
+                "request",
+                targetTopics,
+                body,
+                cache?.state.dataUpdateCount,
+                queryHash,
+                // queryClient
+              );
             } else {
               sharedWorkerClient.request({
                 url,
@@ -209,11 +225,9 @@ export const TRPCContextProvider = ({ children }: { children: ReactNode }) => {
                 body,
                 headers,
                 topicTargets: targetTopics,
-                isRefetching: false
+                isRefetching: false,
               });
             }
-
-            console.log("request", targetTopics, body);
 
             return await sharedWorkerClient.responseWaiter.wait(targetTopic);
 
